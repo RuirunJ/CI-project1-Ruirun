@@ -1,0 +1,61 @@
+# read in RNAseq data
+
+rna.data <- read.table("COADREAD_HiSeqV2",sep="\t",head=TRUE,row.names=1)
+
+rna.data <- as.matrix(rna.data)
+
+# read in survival data
+
+surv.data <- read.table("COADREAD_survival.txt", sep="\t", header=T,row.names=1)
+
+rownames(surv.data)<-gsub(rownames(surv.data), pattern="-", replace=".")
+
+# read in clinical data
+
+clin.data <- read.table("COADREAD_clinicalMatrix", sep="\t", header=T, row.names=1)
+
+rownames(clin.data)<-gsub(rownames(clin.data), pattern="-", replace=".")
+
+# load survival package, look for associations with patient outcomes
+
+library(survival)
+
+os.time <- surv.data[colnames(rna.data),"OS.time"]
+
+os.event <- as.numeric(surv.data[colnames(rna.data),"OS"])
+
+coadread.os <- Surv(os.time,os.event)
+
+# fit a univariate model for each genes's expression, and find those most significantly associated to patient outcome
+
+results.univariate<-array(NA, c(nrow(rna.data),4))
+
+colnames(results.univariate)<-c("HR","LCI","UCI","PVAL")
+
+rownames(results.univariate)<-rownames(rna.data)
+
+results.univariate<-as.data.frame(results.univariate)
+
+for(i in 1:nrow(rna.data))
+  
+{
+  
+  coxphmodel <- coxph(coadread.os ~ as.numeric(rna.data[i,]))
+  
+  results.univariate$HR[i] <- summary(coxphmodel)$coef[1,2]
+  
+  results.univariate$LCI[i] <- summary(coxphmodel)$conf.int[1,3]
+  
+  results.univariate$UCI[i] <- summary(coxphmodel)$conf.int[1,4]
+  
+  results.univariate$PVAL[i] <- summary(coxphmodel)$coef[1,5]
+  
+}
+
+results.univariate<-as.data.frame(results.univariate)
+
+results.univariate$FDR<-p.adjust(results.univariate$PVAL,method="fdr")
+
+results.univariate<-results.univariate[order(results.univariate$FDR, decreasing=F),]
+
+write.csv(x=results.univariate,file="COADREAD_survival_uni.csv")

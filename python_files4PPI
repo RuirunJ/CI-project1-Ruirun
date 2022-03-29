@@ -1,0 +1,441 @@
+#####explore MSI dataset
+
+import pandas as pd
+import os
+import os.path as osp
+import matplotlib.pyplot as plt
+import numpy as np
+
+#Loads data
+drug_to_protein = pd.read_csv('/content/1_drug_to_protein.tsv', sep= '\t')
+disease_to_protein = pd.read_csv('/content/2_indication_to_protein.tsv', sep='\t')
+
+#create dictionary dict_drug_gene, node_1 (drug) as keys and node_2 (protein) as value
+dict_drug_gene = {}
+for i in range(len(drug_to_protein)):
+    entry = drug_to_protein.loc[i]
+    if entry['node_1'] in dict_drug_gene:
+        dict_drug_gene[entry['node_1']].append(entry['node_2'])
+    else:
+        dict_drug_gene[entry['node_1']] = [entry['node_2']]         
+#create dictionary dict_drug_gene_sum: count the amount of value within each key
+dict_drug_gene_sum = {}
+for e in dict_drug_gene:
+    dict_drug_gene_sum[e] = len(dict_drug_gene[e])
+print(dict_drug_gene)
+print(dict_drug_gene_sum)
+
+#Plot distribution of drug targets
+fig = plt.figure(figsize = (14, 10))
+plt.hist(dict_drug_gene_sum.values(), bins = range(50), color='#256DCC')
+#plot line in average
+plt.axvline(np.median(list(dict_drug_gene_sum.values())), color='#8c93b0', linewidth=1, linestyle='dashed')
+min_ylim, max_ylim = plt.ylim()
+plt.text(np.median(list(dict_drug_gene_sum.values()))*1.1, max_ylim*0.9, 'Median: {:.2f}'.format(np.median(list(dict_drug_gene_sum.values()))), size = 'small')
+#Plot max value
+#plt.text(np.sum(matrix, 0).max() - 10, max_ylim*0.1, 'Max: {:.2f}'.format(np.sum(matrix, 0).max()), size='small')
+#Plot min value
+plt.text(np.min(list(dict_drug_gene_sum.values())) - 3 , max_ylim*0.1, 'Min: {:.2f}'.format(np.min(list(dict_drug_gene_sum.values()))), size='small' )
+plt.xlabel('Number of protein targets')
+plt.ylabel('Number of drugs')
+plt.show()
+plt.savefig('histogram_drug_targets.png', format = 'png', backend='cairo')
+
+print('{} molecules not plotted - more than 50 targets'.format(np.sum(np.array(list(dict_drug_gene_sum.values())) > 50)))
+
+np.array(list(dict_drug_gene_sum.values()))
+
+#create dictionary dict_disease_gene, node_1 (disease) as keys and node_2 (protein) as value
+dict_disease_gene = {}
+for i in range(len(disease_to_protein)):
+    entry = disease_to_protein.loc[i]
+    if entry['node_1'] in dict_disease_gene:
+        dict_disease_gene[entry['node_1']].append(entry['node_2'])
+    else:
+        dict_disease_gene[entry['node_1']] = [entry['node_2']]
+#create dictionary dict_disease_gene_sum, count the number of proteins involved in each disease            
+dict_disease_gene_sum = {}
+for e in dict_disease_gene:
+    dict_disease_gene_sum[e] = len(dict_disease_gene[e])
+print(dict_disease_gene)
+print(dict_disease_gene_sum)
+
+#Plot distribution of disease targets
+import matplotlib.pyplot as plt
+import numpy as np
+fig = plt.figure(figsize = (14, 10))
+plt.hist(dict_disease_gene_sum.values(), bins = range(50))
+#plot line in average
+plt.axvline(np.median(list(dict_disease_gene_sum.values())), color='#8c93b0', linewidth=1, linestyle='dashed')
+min_ylim, max_ylim = plt.ylim()
+plt.text(np.median(list(dict_disease_gene_sum.values()))*1.1, max_ylim*0.9, 'Median: {:.2f}'.format(np.median(list(dict_disease_gene_sum.values()))), size = 'small')
+#Plot max value
+# plt.text(np.sum(matrix, 0).max() - 10, max_ylim*0.1, 'Max: {:.2f}'.format(np.sum(matrix, 0).max()), size='small')
+#Plot min value
+plt.text(np.min(list(dict_disease_gene_sum.values())) - 3 , max_ylim*0.1, 'Min: {:.2f}'.format(np.min(list(dict_disease_gene_sum.values()))), size='small' )
+plt.show()
+
+print('{} molecules not plotted - more than 50 targets'.format(np.sum(np.array(list(dict_disease_gene_sum.values())) > 50)))
+
+######################protein-protein
+
+#Loads data - node_1 and node_2 correspond to Entrez IDs for genes
+protein_to_protein = pd.read_csv('/content/3_protein_to_protein.tsv', sep= '\t')
+
+protein_to_protein
+
+#joint node_1 and node_2 together, in total 17660 genes
+genes_in_msi = list(set(protein_to_protein['node_1'].tolist()).union(set(protein_to_protein['node_2'].tolist())))
+print(len(genes_in_msi))
+print(genes_in_msi)
+
+#create a dictionary dict_msi_entrez_id_name: gene id as keys, gene name as values
+dict_msi_entrez_id_name = {}
+for node_1, node_1_name in zip(protein_to_protein['node_1'], protein_to_protein['node_1_name']):
+    dict_msi_entrez_id_name[node_1] = node_1_name
+for node_2, node_2_name in zip(protein_to_protein['node_2'], protein_to_protein['node_2_name']):
+    dict_msi_entrez_id_name[node_2] = node_2_name
+len(dict_msi_entrez_id_name)
+
+#####################I will process my data to conform to the MSI PPI and save files to run their propogation algorithm
+
+####################Food molecules
+
+#dict_id_entrez is a dictionary, key-Index and value-Gene_ID
+#dataset_dir = '.'
+genes = pd.read_csv('/content/genes.csv.gz')
+dict_id_entrez = dict(zip(genes['Index'], genes['Gene_ID']))
+
+# torch version
+!python -c "import torch; print(torch.__version__)"
+
+# CUDA version
+!python -c "import torch; print(torch.version.cuda)"
+
+#It seems this line doesn't play a role in the following process
+#from torch_geometric.data import Data 
+#compounds = pd.read_csv(osp.join(dataset_dir, '/content/compounds_with_final_selections.csv.gz'))
+compounds = pd.read_csv('/content/compounds_with_final_selections.csv.gz')
+#only reserve food molecule
+compounds = compounds[compounds['Is_Food'] == True]
+#get rid of compounds whose STITCH_Gene_connections is na
+compounds = compounds[~compounds['STITCH_Gene_connections'].isna()].reset_index(inplace=False, drop=True)
+print(compounds)
+
+dict_entrez_name = {}
+for entrez, name in zip(genes['Gene_ID'], genes['GSEA']):
+    #if a Gene_ID contains "|", splite this Gene_ID by '|'
+    #e_list is a list contains Gene_ID
+    e_list = str(entrez).split('|')
+    for e in e_list:
+        #skip blank Gene_ID
+        if e == 'nan':
+            continue
+        #name: GSEA: gene's abbreviation
+        dict_entrez_name[int(e)] = name
+dict_entrez_name    
+
+
+#STITCH_Gene_connections over 700 means that the connection between food molecule and proteins has been experimentally verified
+threshold_stitch = 700
+dict_compound_id_genes = {}
+for i in range(len(compounds)):
+    entry = compounds.loc[i]
+    gene_list = []
+    for e in entry['STITCH_Gene_connections'].split('|'):
+      #example of stitch_gene_connections: 16891:226|6315:160|10610:160|3333:160|12734:192|864:160|4144:226|11454:160|; how to illustrate it?
+        if int(e.split(':')[1]) >= threshold_stitch:
+            gene_list.append(int(e.split(':')[0]))
+            if len(gene_list) > 0:
+                dict_compound_id_genes[entry['ID']] = gene_list
+            
+#Dictionary of compounds (food molecules) and entrex gene IDs (targets), only reserve genes included in gene-in-msi
+dict_compound_id_genes_entrez = {}
+for e in dict_compound_id_genes:
+    genes_l = []
+    for ee in dict_compound_id_genes[e]:
+        for a in str(dict_id_entrez[ee]).split('|'):
+            if a == 'nan':
+                continue
+            else:
+                if int(a) in genes_in_msi:
+                    genes_l += [int(a)]
+    dict_compound_id_genes_entrez[e] = genes_l   
+    
+#get rid of keys with zero interacted gene
+dict_compound_id_genes_entrez_f = {}
+for e in dict_compound_id_genes_entrez:
+    if len(dict_compound_id_genes_entrez[e]) == 0:
+        continue
+    else:
+        dict_compound_id_genes_entrez_f[e] = dict_compound_id_genes_entrez[e]
+
+dict_compound_id_genes_entrez = dict_compound_id_genes_entrez_f   
+dict_compound_id_genes_entrez_sum = {}
+for e in dict_compound_id_genes_entrez:
+    dict_compound_id_genes_entrez_sum[e] = len(dict_compound_id_genes_entrez[e])
+dict_compound_id_genes_entrez 
+
+#Plot distribution of drug targets
+import matplotlib.pyplot as plt
+import numpy as np
+fig = plt.figure(figsize = (14, 10))
+plt.hist(dict_compound_id_genes_entrez_sum.values(), bins = range(50))
+#plot line in average
+plt.axvline(np.median(list(dict_compound_id_genes_entrez_sum.values())), color='#8c93b0', linewidth=1, linestyle='dashed')
+min_ylim, max_ylim = plt.ylim()
+plt.text(np.median(list(dict_compound_id_genes_entrez_sum.values()))*1.1, max_ylim*0.9, 'Median: {:.2f}'.format(np.median(list(dict_compound_id_genes_entrez_sum.values()))), size = 'small')
+#Plot max value
+# plt.text(np.sum(matrix, 0).max() - 10, max_ylim*0.1, 'Max: {:.2f}'.format(np.sum(matrix, 0).max()), size='small')
+#Plot min value
+plt.text(np.min(list(dict_disease_gene_sum.values())) - 3 , max_ylim*0.1, 'Min: {:.2f}'.format(np.min(list(dict_compound_id_genes_entrez_sum.values()))), size='small' )
+plt.show()
+print('{} molecules not plotted - more than 50 targets'.format(np.sum(np.array(list(dict_compound_id_genes_entrez_sum.values())) > 50)))
+
+len(dict_compound_id_genes_entrez)
+
+#Creates rows of file compound_to_protein (following format of msi drug_to_protein file)
+rows = []
+node_1_type = 'drug'
+node_2_type = 'protein'
+
+for i in range(len(compounds)):
+    entry = compounds.loc[i]
+    compound_id = entry['ID']
+    node_1_name = entry['Name']
+    if not compound_id in dict_compound_id_genes_entrez:
+        continue
+    genes = dict_compound_id_genes_entrez[compound_id]
+    for g in genes:
+        node_2_name = dict_msi_entrez_id_name[g]
+        rows.append([compound_id, g, node_1_type, node_2_type, node_1_name, node_2_name])
+
+outdir = osp.join('processed', 'msi')
+os.makedirs(outdir, exist_ok = True)
+pd.DataFrame(rows, columns = drug_to_protein.columns).to_csv(osp.join(outdir, '1_drug_to_protein.tsv'), sep = '\t', index=False)
+entrez_ids_foodm = set(pd.DataFrame(rows, columns = drug_to_protein.columns)['node_2'].tolist())
+food_to_protein = pd.DataFrame(rows, columns = drug_to_protein.columns)
+
+###############RC profile
+
+rt_genes = pd.read_csv('/content/genes_rt_resistance.txt', header=None)
+rt_genes[0].tolist()
+
+#load colorectal cancer related genes
+rc_genes=pd.read_csv('/content/colorectal_genes_tcga.csv')
+rc_genes['GENE_NAME'].tolist()
+
+rows = []
+node_1_type = 'indication'
+node_2_type = 'protein'
+entrez_genes_rc = []
+
+#for node_2_name in rt_genes[0].tolist():
+#    entrez_ids = dict_name_id[node_2_name]
+compound_id = 'Colorectal_Carcinoma'
+node_1_name = 'Colorectal_Carcinoma' 
+for gene in rc_genes['Gene_id']:
+        gene = int(gene)
+        if gene in genes_in_msi:
+            node_2_name = dict_msi_entrez_id_name[gene]
+            rows.append([compound_id, gene, node_1_type, node_2_type, node_1_name, node_2_name])
+            entrez_genes_rc.append(gene)
+
+pd.DataFrame(rows ,columns = disease_to_protein.columns).to_csv(osp.join(outdir, '2_indication_to_protein.tsv'), sep = '\t', index=False)
+
+#################Explore if the genes targeted by RC have been targeted by other diseases in the MSI set
+
+print('Protein overlap between indications and RC: {}'.format(len(set(disease_to_protein['node_2'].tolist()).intersection(entrez_genes_rc)) / len(entrez_genes_rc)))
+
+################Explore if the genes targeted by food molecules have been targeted by drugs in the MST set
+
+print('Protein overlap between drugs and foodm: {}'.format(len(set(drug_to_protein['node_2'].tolist()).intersection(entrez_ids_foodm)) / len(entrez_ids_foodm)))
+
+##############explore overlap distribution of 100 random samples drugs vs food molecules
+
+#For drugs
+
+import random
+overlaps = []
+for i in range(len(dict_drug_gene)):
+#     rdx_id = random.randint(0, len(dict_drug_gene))
+    rdx_id = i
+    rdx_node_1 = list(dict_drug_gene.keys())[rdx_id]
+    node_1_genes = set(drug_to_protein[drug_to_protein['node_1'] == rdx_node_1]['node_2'].tolist())
+    all_genes = set(drug_to_protein[drug_to_protein['node_1'] != rdx_node_1]['node_2'].tolist())
+    overlaps.append(len(node_1_genes.intersection(all_genes)) / len(node_1_genes))
+    
+fig = plt.figure(figsize = (14, 10))
+plt.hist(overlaps, bins = 20)    
+print('Average overlap between drugs (1 vs all): {}'.format(np.mean(overlaps)))
+
+np.median(np.array(overlaps)[np.array(overlaps) != 0])
+
+#For food molecules
+import random
+overlaps_fm = []
+for i in range(len(dict_compound_id_genes_entrez)):
+#     rdx_id = random.randint(0, len(dict_compound_id_genes_entrez))
+    rdx_id = i
+    rdx_node_1 = list(dict_compound_id_genes_entrez.keys())[rdx_id]
+    node_1_genes = set(food_to_protein[food_to_protein['node_1'] == rdx_node_1]['node_2'].tolist())
+    all_genes = set(drug_to_protein[drug_to_protein['node_1'] != rdx_node_1]['node_2'].tolist())
+    overlaps_fm.append(len(node_1_genes.intersection(all_genes)) / len(node_1_genes))
+    
+fig = plt.figure(figsize = (14, 10))
+plt.hist(overlaps_fm, bins = 20)    
+print('Average overlap between food molecules and drugs: {}'.format(np.mean(overlaps_fm)))
+
+np.median(np.array(overlaps_fm)[np.array(overlaps_fm) != 0])
+
+plt.violinplot([np.array(overlaps)[np.array(overlaps) != 0], np.array(overlaps_fm)[np.array(overlaps_fm) != 0]])
+
+###Compare overlaps mean - t-test
+from scipy.stats import ttest_ind
+#ttest_ind(overlaps, overlaps_fm , alternative='less')
+ttest_ind(overlaps, overlaps_fm)
+
+import scipy
+scipy.__version__
+
+len(overlaps_fm)
+
+##############explore overlap distribution of 100 random samples diseases vs RC
+
+#For drugs
+
+import random
+overlaps = []
+for i in range(len(dict_disease_gene)):
+#     rdx_id = random.randint(0, len(dict_disease_gene)-1)
+    rdx_id = i
+    rdx_node_1 = list(dict_disease_gene.keys())[rdx_id]
+    node_1_genes = set(disease_to_protein[disease_to_protein['node_1'] == rdx_node_1]['node_2'].tolist())
+    all_genes = set(disease_to_protein[disease_to_protein['node_1'] != rdx_node_1]['node_2'].tolist())
+    overlaps.append(len(node_1_genes.intersection(all_genes)) / len(node_1_genes))
+    
+fig = plt.figure(figsize = (14, 10))
+plt.hist(overlaps, bins = 20)    
+print('Average overlap between diseases (1 vs all): {}'.format(np.mean(overlaps)))
+
+min(np.array(overlaps)[np.array(overlaps) != 0])
+
+np.median(overlaps)
+
+print('Protein overlap between indications and RC: {}'.format(len(set(disease_to_protein['node_2'].tolist()).intersection(entrez_genes_rc)) / len(entrez_genes_rc)))
+
+###################check which are the diseases that RC overlaps with
+
+dict_disease_id_name = dict(zip(disease_to_protein['node_1'], disease_to_protein['node_1_name']))
+disease_with_overlap = []
+for key in dict_disease_gene:
+    if len(set(entrez_genes_rc).intersection(dict_disease_gene[key])) > 0:
+        d_name = dict_disease_id_name[key]
+        disease_with_overlap.append([d_name, len(set(entrez_genes_rc).intersection(dict_disease_gene[key]))])
+
+disease_with_overlap = pd.DataFrame(disease_with_overlap).sort_values(by=1, ascending=False)
+disease_with_overlap[disease_with_overlap[1] >1]
+
+disease_name_with_overlap
+
+#################plots for paper
+
+def bins_labels(bins, **kwargs):
+    bin_w = (max(bins) - min(bins)) / (len(bins) - 1)
+    plt.xticks(np.arange(min(bins)+bin_w/2, max(bins)+1, bin_w), bins, **kwargs)
+    plt.xlim(bins[0], bins[-1])
+    
+plt.style.use('seaborn-deep')
+#Plot distribution of drug targets
+bins = range(30)
+
+
+fig = plt.figure(figsize = (14, 10))
+
+#Plot max value
+# plt.text(np.sum(matrix, 0).max() - 10, max_ylim*0.1, 'Max: {:.2f}'.format(np.sum(matrix, 0).max()), size='small')
+#Plot min value
+# plt.text(np.min(list(dict_drug_gene_sum.values())) - 3 , max_ylim*0.1, 'Min: {:.2f}'.format(np.min(list(dict_drug_gene_sum.values()))), size='small' )
+plt.xlabel('Number of protein targets', fontsize=12)
+plt.ylabel('Number of drugs', fontsize = 12)
+
+#Food molecules
+# 256DCC
+# plt.hist(dict_compound_id_genes_entrez_sum.values(), bins = range(30), color = '#256DCC', alpha = 1)
+
+#plot line in average
+# plt.axvline(np.median(list(dict_compound_id_genes_entrez_sum.values())), color='#8c93b0', linewidth=1, linestyle='dashed')
+# min_ylim, max_ylim = plt.ylim()
+# plt.text(np.median(list(dict_compound_id_genes_entrez_sum.values()))*1.1, max_ylim*0.9, 'Median food molecules: {:.2f}'.format(np.median(list(dict_compound_id_genes_entrez_sum.values()))), size = 'small')
+
+
+
+#Drugs - MSI
+plt.hist([list(dict_drug_gene_sum.values()), list(dict_compound_id_genes_entrez_sum.values())], bins = range(30), color=['#256DCC', '#C41795'], label = ['Drugs', 'Food molecules'])
+
+#plot line in average
+# plt.axvline(np.median(list(dict_drug_gene_sum.values())), color='#8c93b0', linewidth=1, linestyle='dashed')
+# min_ylim, max_ylim = plt.ylim()
+# plt.text(np.median(list(dict_drug_gene_sum.values()))*1.1, max_ylim*0.9, 'Median drugs: {:.2f}'.format(np.median(list(dict_drug_gene_sum.values()))), size = 'small')
+bins_labels(bins, fontsize=10)
+plt.legend(loc='upper right')
+# plt.show()
+plt.savefig('histogram_drug_targets_foodm.pdf', format = 'pdf', backend='cairo')
+plt.close()
+
+
+print('{} food molecules not plotted - more than 30 targets'.format(np.sum(np.array(list(dict_compound_id_genes_entrez_sum.values())) > 30)))
+print('{} food molecules not plotted - more than 30 targets'.format(np.sum(np.array(list(dict_drug_gene_sum.values())) > 30)))
+
+from scipy.stats import ttest_ind
+print('Average drug targets: {}'.format(np.mean(list(dict_drug_gene_sum.values()))))
+print('Average food molecule targets: {}'.format(np.mean(list(dict_compound_id_genes_entrez_sum.values()))))
+drug_gene_sum = np.array(list(dict_drug_gene_sum.values()))
+food_gene_sum = np.array(list(dict_compound_id_genes_entrez_sum.values()))
+ttest_ind(drug_gene_sum[drug_gene_sum <= 50], food_gene_sum[food_gene_sum <= 50])
+
+np.mean(food_gene_sum[food_gene_sum <= 50])
+
+def bins_labels(bins, **kwargs):
+    bin_w = (max(bins) - min(bins)) / (len(bins) - 1)
+    plt.xticks(np.arange(min(bins)+bin_w/2, max(bins)+2, bin_w), bins, **kwargs)
+    plt.xlim(bins[0], bins[-1])
+    
+#Plot distribution of disease targets
+bins = range(0, 50, 2)
+
+import matplotlib.pyplot as plt
+import numpy as np
+fig = plt.figure(figsize = (14, 10))
+plt.hist(dict_disease_gene_sum.values(), bins = bins, color = '#C5D660')
+n_rectal = len(rt_genes[0].tolist())
+
+plt.xlabel('Number of disease genes', fontsize=12)
+plt.ylabel('Number of diseases', fontsize = 12)
+
+
+
+#plot line in average
+plt.axvline(n_rectal, color='#8c93b0', linewidth=1, linestyle='dashed')
+min_ylim, max_ylim = plt.ylim()
+plt.text(n_rectal*1.1, max_ylim*0.9, '# of genes in rt response: {}'.format(n_rectal), size = 'small')
+#Plot max value
+# plt.text(np.sum(matrix, 0).max() - 10, max_ylim*0.1, 'Max: {:.2f}'.format(np.sum(matrix, 0).max()), size='small')
+#Plot min value
+# plt.text(np.min(list(dict_disease_gene_sum.values())) - 3 , max_ylim*0.1, 'Min: {:.2f}'.format(np.min(list(dict_disease_gene_sum.values()))), size='small' )
+
+# bins_labels(bins, fontsize=10)
+plt.savefig('histogram_disease_genes.pdf', format = 'pdf', backend='cairo')
+
+# plt.show()
+plt.close()
+
+print('{} molecules not plotted - more than 50 targets'.format(np.sum(np.array(list(dict_disease_gene_sum.values())) > 50)))
+
+min(bins)
+
+max(list(dict_disease_gene_sum.values()))
+
+np.median(list(dict_disease_gene_sum.values()))
+
+list(dict_disease_gene_sum.values())

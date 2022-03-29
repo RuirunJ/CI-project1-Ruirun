@@ -1,0 +1,10 @@
+library(ActivePathways)
+scores <- read.csv("Pvalues_matrix.csv",header= T,row.names=1)
+scores <- as.matrix(scores)
+result <- ActivePathways(scores,'c5.go.bp.v7.5.1.symbols.gmt')
+#Writing results to a CSV file
+result.file <- paste('ActivePathways_results.csv', sep = '/')
+export_as_CSV (result, result.file) # remove comment to run
+read.csv(result.file, stringsAsFactors = F)[1:3,]
+#Visualising pathway enrichment results using enrichment maps in Cytoscape
+res <- ActivePathways(scores, 'c5.go.bp.v7.5.1.symbols.gmt',, cytoscape.file.tag = "enrichmentMap__")

@@ -1,0 +1,35 @@
+pip install git+git://github.com/zqfang/gseapy.git#egg=gseapy
+
+pip install requests
+
+pip install gseapy
+
+import pandas as pd
+import os
+import os.path as osp
+import matplotlib.pyplot as plt
+import numpy as np
+import scipy
+import requests
+import gseapy as gp
+
+# Check gseapy version
+gp.__version__
+
+# read in an gene list
+gene_list = pd.read_csv("/content/disgenet_gene_list.txt",header=None, sep="\t")
+gene_list.head()
+
+# convert dataframe or series to list
+glist = gene_list.squeeze().str.strip().tolist()
+print(glist[:10])
+
+enr = gp.enrichr(gene_list="/content/disgenet_gene_list.txt",
+                 gene_sets='GO_Biological_Process_2021',
+                 organism='Human', # don't forget to set organism to the one you desired! e.g. Yeast
+                 description='test_name',
+                 outdir='test/enrichr_kegg',
+                 # no_plot=True,
+                 cutoff=0.5 # test dataset, use lower value from range(0,1)
+                )
+

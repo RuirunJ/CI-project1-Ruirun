@@ -1,0 +1,36 @@
+#install limma package
+#if (!require("BiocManager", quietly = TRUE))
+#install.packages("BiocManager")
+
+#BiocManager::install("limma")
+
+rna.data <- read.table('COADREAD_HiSeqV2',sep='\t',header=T)
+
+rownames(rna.data) <- rna.data[,1]
+
+clin.data <- read.table('COADREAD_clinicalMatrix',sep='\t',header=T)
+
+rownames(clin.data) <- clin.data$sampleID
+
+rownames(clin.data) <- gsub(rownames(clin.data),pattern="-",replace=".")
+
+commonpatient <- intersect(rownames(clin.data),colnames(rna.data))
+
+rna <- rna.data[,commonpatient]
+
+clin <- clin.data[commonpatient,]
+
+library(limma)
+
+#normal tissue is 1, abnormal tissue is 0
+
+design <- cbind(intercept=1, normal = as.numeric(clin$sample_type=='Solid Tissue Normal'))
+
+
+rna.fit <- lmFit(rna,design)
+
+rna.fit <- eBayes(rna.fit)
+
+topTable(rna.fit,coef=2)
+
+write.csv(rna.fit$p.value,file="COADREAD_limma_diffexp.csv")
